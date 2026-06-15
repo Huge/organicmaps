@@ -2075,11 +2075,11 @@ void Framework::MarkMapStyle(MapStyle mapStyle)
   GetStyleReader().SetCurrentStyle(mapStyle);
 }
 
-void Framework::SetMapStyle(MapStyle mapStyle)
+void Framework::SetMapStyle(MapStyle mapStyle, bool reloadFromDisk)
 {
   MarkMapStyle(mapStyle);
   if (m_drapeEngine != nullptr)
-    m_drapeEngine->UpdateMapStyle();
+    m_drapeEngine->UpdateMapStyle(reloadFromDisk);
   InvalidateUserMarks();
   UpdateBookmarksTextPlacement();
   UpdateMinBuildingsTapZoom();
