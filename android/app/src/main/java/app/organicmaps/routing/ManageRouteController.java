@@ -71,6 +71,12 @@ public class ManageRouteController implements ManageRouteAdapter.ManageRouteList
     RoutingController.get().launchPlanning();
   }
 
+  public void reverseRoute()
+  {
+    mManageRouteAdapter.reverseRoutePoints();
+    onRouteOrderChanged(mManageRouteAdapter.getRoutePoints());
+  }
+
   public void refresh()
   {
     // Resync the existing adapter with the native route points. Reusing the same adapter and touch helper
