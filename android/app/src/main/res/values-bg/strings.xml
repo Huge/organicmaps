@@ -949,4 +949,6 @@
     <string name="choose_point_on_map_hint">Преместете и мащабирайте картата, за да позиционирате кръстчето</string>
     <!-- Track recording notification button: stops the recording and saves the recorded track. -->
     <string name="track_recording_stop_and_save">Спрете и запазете</string>
+    <!-- Accessibility label for the button that swaps the route direction -->
+    <string name="reverse_route">Обръщане на маршрута</string>
 </resources>
