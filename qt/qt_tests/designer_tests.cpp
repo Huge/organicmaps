@@ -13,6 +13,7 @@
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
 #include <QtCore/QTemporaryDir>
+#include <QtCore/QTemporaryFile>
 #include <QtWidgets/QApplication>
 
 #include <stdexcept>
@@ -70,6 +71,26 @@ struct StyleFixture
   }
 };
 }  // namespace
+
+UNIT_TEST(Designer_ResolvesNativeExecutableName)
+{
+  EnsureApp();
+  QString path = QCoreApplication::applicationDirPath() + "/designer-helper-XXXXXX";
+#ifdef OMIM_OS_WINDOWS
+  path += ".exe";
+#endif
+  QTemporaryFile helper(path);
+  TEST(helper.open(), ());
+  TEST(helper.setPermissions(QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner), ());
+  auto const file = QFileInfo(helper);
+#ifdef OMIM_OS_WINDOWS
+  auto const name = file.completeBaseName();
+#else
+  auto const name = file.fileName();
+#endif
+  TEST_EQUAL(QFileInfo(GetExternalPath(name, {})).canonicalFilePath().toStdString(),
+             file.canonicalFilePath().toStdString(), ());
+}
 
 UNIT_TEST(Designer_PhoneExportRejectsOverlappingSourcesBeforeConfirmation)
 {

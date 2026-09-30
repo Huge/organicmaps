@@ -252,7 +252,7 @@ jobs:
           python -m unittest discover -s tools/windows -p test_stage_runtime.py
           cmake --preset "$PRESET" \
             -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTING=OFF -DBUILD_DESIGNER=OFF \
+            -DBUILD_TESTING=OFF \
             -DOMIM_WINDOWS_DISTRIBUTION=direct
           cmake --build --preset "$PRESET" --target desktop
           cmake --install build --prefix dist/windows-direct-ci --component WindowsRuntime

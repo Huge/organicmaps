@@ -53,9 +53,9 @@ echo "Copying data"
 # bundle (macOS), so it is both where the MapCSS sources to edit live and where Build Style
 # writes the rebuilt drules and symbols.
 if [ "$APP" = OrganicMaps.app ]; then
-  # The bundle's Resources already carry every runtime resource (copy_resources() in
-  # qt/CMakeLists.txt), so ship only what the Designer adds on top of them.
-  DATA_PATHSPEC=(data/styles data/mapcss-mapping.csv data/mapcss-dynamic.txt)
+  # The bundle carries the shared runtime resources. Style sources and generator-only inputs
+  # belong in the writable package data directory, where helper readers also look.
+  DATA_PATHSPEC=(data/styles data/mapcss-mapping.csv data/mapcss-dynamic.txt data/generator/timezone/timezone_info.json)
 else
   # Everything except the generator- and test-only data, which is most of data/ by size.
   DATA_PATHSPEC=(data ':(exclude)data/borders' ':(exclude)data/test_data' ':(exclude)data/minsk-pass.*'

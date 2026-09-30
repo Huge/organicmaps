@@ -93,6 +93,8 @@ cmake --build --preset debug --target desktop generator_tool style_tests
 ./build/debug/OrganicMaps.app/Contents/MacOS/OrganicMaps --designer data/styles/default/light/style.mapcss
 # Linux:
 ./build/debug/OrganicMaps --designer data/styles/default/light/style.mapcss
+# Windows (PowerShell):
+.\build\debug\OrganicMaps.exe --designer data/styles/default/light/style.mapcss
 ```
 
 Launch it from the repository root: the writable dir then resolves to
@@ -100,6 +102,9 @@ Launch it from the repository root: the writable dir then resolves to
 `generate_symbols.sh` put them (commit or discard the changes as usual).
 Only `python3` must be on `PATH`; the drawing-rules writer (`libkomwm.py`)
 is pure Python and needs no extra packages.
+Designer is a runtime mode of the desktop app and needs no separate CMake flag.
+Windows direct/Store runtime artifacts omit style sources and Designer helpers;
+use a development checkout for style editing on Windows.
 
 Pass any of the six supported `style.mapcss` files:
 
