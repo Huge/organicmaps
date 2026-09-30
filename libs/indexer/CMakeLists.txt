@@ -37,6 +37,8 @@ set(SRC
   drawing_rule_def.hpp
   drawing_rules.cpp
   drawing_rules.hpp
+  drawing_rules_guard.cpp
+  drawing_rules_guard.hpp
   drules_format.cpp
   drules_format.hpp
   drules_selector.cpp

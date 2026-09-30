@@ -17,9 +17,9 @@ public:
   bool IsCarNavigationStyle() const;
 
   // Designer mode (desktop app --designer, generator_tool --designer): style files rebuilt by the
-  // Designer are read from the writable dir without the styles/ override, drawable scale ranges are
-  // widened (see scales_patch.hpp) and the classificator is reloaded on every style refresh. Set
-  // once at startup, before any style file is read.
+  // Designer are read from the writable dir without the styles/ override. Map generation widens
+  // drawable scale ranges (see scales_patch.hpp); the desktop requests drawing-rule reloads
+  // explicitly through Framework::SetMapStyle(). Set once at startup, before any style file is read.
   void SetDesignerMode(bool designerMode) { m_designerMode = designerMode; }
   bool IsDesignerMode() const { return m_designerMode; }
 

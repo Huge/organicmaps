@@ -22,7 +22,6 @@
 #include "drape/support_manager.hpp"
 #include "drape/utils/projection.hpp"
 
-#include "indexer/classificator_loader.hpp"
 #include "indexer/drawing_rules.hpp"
 #include "indexer/scales.hpp"
 
@@ -1098,21 +1097,14 @@ void FrontendRenderer::UpdateAll(bool reloadStyleFromDisk)
     blocker.Wait();
   }
 
-  // The Designer's Build Style rewrites classificator.txt, types.txt and the drules, so re-read
-  // them. It must happen here and not earlier: classificator::Load() clears the trees that the
-  // ReadManager pool threads walk through classif() and drule::GetRules(), and only the blocking
-  // message above has stopped that pool (its blocker-only ctor means NeedRestartReading()). The
-  // next tile tasks are posted by UpdateContextDependentResources() at the end of this function.
-  if (reloadStyleFromDisk)
-    classificator::Load();
-
   // Delete all messages which can contain render states (and textures references inside).
   auto f = [this]() { InstantMessageFilter([](ref_ptr<Message> msg) { return msg->ContainsRenderState(); }); };
 
   // Notify backend renderer and wait for completion.
   {
     BaseBlockingMessage::Blocker blocker;
-    m_commutator->PostMessage(ThreadsCommutator::ResourceUploadThread, make_unique_dp<MessageT>(blocker, std::move(f)),
+    m_commutator->PostMessage(ThreadsCommutator::ResourceUploadThread,
+                              make_unique_dp<MessageT>(blocker, std::move(f), reloadStyleFromDisk),
                               MessagePriority::Normal);
     blocker.Wait();
   }

@@ -24,5 +24,6 @@ void CopyToWritableDir(QString const & name, QString const & srcDir);
 QString JoinPathQt(std::initializer_list<QString> folders);
 
 // Finds a helper file/binary at relativePath (relative to the resources or the writable dir) or
-// next to the app itself; throws when it is missing. Pass an empty relativePath for a binary.
+// next to the app itself; throws when it is missing. Pass an empty relativePath for a binary,
+// which is also searched inside the macOS bundle and receives the platform's executable suffix.
 QString GetExternalPath(QString const & name, QString const & relativePath);

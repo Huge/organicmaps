@@ -36,13 +36,16 @@ mkdir -p "$OUT_DIR"
 echo "Copying $APP and the binaries the Designer runs"
 cp -R "$BUILD_DIR/$APP" "$OUT_DIR/"
 # Recalculate geometry index runs generator_tool, Run tests runs style_tests.
-# GetExternalPath() finds both next to the app, see qt/build_style/build_common.cpp.
+HELPER_DIR="$OUT_DIR"
+if [ "$APP" = OrganicMaps.app ]; then
+  HELPER_DIR="$OUT_DIR/$APP/Contents/MacOS"
+fi
 for binary in generator_tool style_tests; do
   if [ ! -x "$BUILD_DIR/$binary" ]; then
     echo "No $BUILD_DIR/$binary, build the '$binary' target first." >&2
     exit 2
   fi
-  cp "$BUILD_DIR/$binary" "$OUT_DIR/"
+  cp "$BUILD_DIR/$binary" "$HELPER_DIR/"
 done
 
 echo "Copying data"
@@ -82,7 +85,8 @@ if [ "$APP" = OrganicMaps.app ]; then
     echo "macdeployqt not found, set QT_PATH to the Qt 6 installation." >&2
     exit 2
   fi
-  "$MACDEPLOYQT" "$OUT_DIR/$APP"
+  "$MACDEPLOYQT" "$OUT_DIR/$APP" \
+    -executable="$HELPER_DIR/generator_tool" -executable="$HELPER_DIR/style_tests"
   # macdeployqt leaves the frameworks it rewrote with a stale signature and still exits with 0,
   # so re-sign and verify here: Gatekeeper refuses to open a downloaded app that fails to verify.
   codesign --force --sign - --deep "$OUT_DIR/$APP"
@@ -90,10 +94,11 @@ if [ "$APP" = OrganicMaps.app ]; then
   # Nothing sets CMAKE_OSX_DEPLOYMENT_TARGET, so the app runs on the macOS it was built on
   # and newer only; Homebrew's Qt, bundled above, is built per macOS version anyway.
   REQUIREMENT="macOS $(otool -l "$OUT_DIR/$APP_BINARY" | awk '/minos/ {print $2; exit}') or newer.
-  Qt is bundled, but the package is not notarized, so clear the download quarantine flag
+  Qt is bundled for the app and its helpers. The package is not notarized, so clear the download quarantine flag
   once after unpacking: \`xattr -dr com.apple.quarantine .\`"
 else
-  REQUIREMENT="Ubuntu 24.04 or newer with Qt 6 installed system-wide (Qt is not bundled):
+  REQUIREMENT="Linux with compatible system Qt 6 and C++ runtime libraries (Qt is not bundled).
+  The CI Linux artifact is built on Ubuntu 26.04 with GCC 15; use the matching distribution:
   \`sudo apt install qt6-base-dev qt6-positioning-dev libqt6svg6-dev\`, as in docs/INSTALL.md."
 fi
 
@@ -105,7 +110,7 @@ cd "\$(dirname "\$0")"
 STYLE="\${1:-data/styles/default/light/style.mapcss}"
 case "\$STYLE" in /*) ;; *) STYLE="\$PWD/\$STYLE" ;; esac
 if [ -d ./OrganicMaps.app/Contents/Resources ]; then
-  # Helper binaries run outside the bundle and need its immutable resources.
+  # Explicit paths also apply to console helpers before their command-line flags are parsed.
   export MWM_RESOURCES_DIR="\$PWD/OrganicMaps.app/Contents/Resources"
   export MWM_WRITABLE_DIR="\$PWD/data"
 fi

@@ -138,7 +138,7 @@ Platform::Platform()
       m_writableDir = MigrateAppSupportDirectory(supportDir, "OMapsData", "OrganicMaps");
       if (m_writableDir == base::JoinPath(supportDir, "OrganicMaps"))
       {
-        // Older compile-time Designer builds used a separate directory.
+        // The shared support directory also accepts data stored under the Designer-specific name.
         m_writableDir = MigrateAppSupportDirectory(supportDir, "OMapsData.Designer", "OrganicMaps");
       }
       CHECK(MkDirRecursively(m_writableDir), ("Cannot create Application Support directory", m_writableDir));

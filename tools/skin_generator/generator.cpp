@@ -20,8 +20,7 @@ namespace tools
 namespace
 {
 
-static constexpr double kLargeIconSize = 24.0;   // Size of the -l SVG icons
-static constexpr double kMediumIconSize = 18.0;  // size of the -m SVG icons
+static constexpr double kMediumIconSize = 18.0;
 
 struct GreaterHeight
 {
@@ -92,30 +91,10 @@ void SkinGenerator::ProcessSymbols(std::string const & svgDataDir, std::string c
       if (fileName.endsWith(".svg"))
       {
         QString fullFileName = QString(dir.absolutePath()) + "/" + fileName;
-        if (m_svgRenderer.load(fullFileName))
-        {
-          QSize svgSize = m_svgRenderer.defaultSize();  // Size of the SVG file
-
-          // Capping svg symbol to kLargeIconSize maximum, keeping aspect ratio
-          /*if (svgSize.width() > kLargeIconSize)
-          {
-            auto const h = static_cast<float>(svgSize.height()) * kLargeIconSize / svgSize.width();
-            svgSize.setHeight(static_cast<int>(h));
-            svgSize.setWidth(kLargeIconSize);
-          }
-
-          if (svgSize.height() > kLargeIconSize)
-          {
-            auto const w = static_cast<float>(svgSize.width()) * kLargeIconSize / svgSize.height();
-            svgSize.setWidth(static_cast<int>(w));
-            svgSize.setHeight(kLargeIconSize);
-          }*/
-
-          // Scale symbol to required size
-          QSize size = svgSize * (symbolSizes[j].width() / kMediumIconSize);
-
-          page.m_symbols.emplace_back(size + QSize(4, 4), fullFileName, symbolID);
-        }
+        if (!m_svgRenderer.load(fullFileName))
+          throw std::runtime_error("Cannot load SVG symbol " + fullFileName.toStdString());
+        QSize const size = m_svgRenderer.defaultSize() * (symbolSizes[j].width() / kMediumIconSize);
+        page.m_symbols.emplace_back(size + QSize(4, 4), fullFileName, symbolID);
       }
       else if (fileName.toLower().endsWith(".png"))
       {
@@ -124,10 +103,7 @@ void SkinGenerator::ProcessSymbols(std::string const & svgDataDir, std::string c
         // are safe to use outside of the GUI thread.
         QSize const s = QImageReader(fullFileName).size();
         if (!s.isValid())
-        {
-          LOG(LWARNING, ("Skipping unreadable symbol image", fullFileName.toStdString()));
-          continue;
-        }
+          throw std::runtime_error("Cannot read PNG symbol " + fullFileName.toStdString());
         page.m_symbols.emplace_back(s + QSize(4, 4), fullFileName, symbolID);
       }
     }
@@ -145,6 +121,9 @@ bool SkinGenerator::RenderPages(uint32_t maxSize)
 
     page.m_width = NextPowerOf2(page.m_width);
     page.m_height = NextPowerOf2(page.m_height);
+    // A single oversized symbol can fit the initial page without triggering a packing overflow.
+    if (page.m_width > maxSize || page.m_height > maxSize)
+      return false;
 
     // Packing until we find a suitable rect.
     while (true)
@@ -201,12 +180,16 @@ bool SkinGenerator::RenderPages(uint32_t maxSize)
       QString fullLowerCaseName = s.m_fullFileName.toLower();
       if (fullLowerCaseName.endsWith(".svg"))
       {
-        m_svgRenderer.load(s.m_fullFileName);
+        if (!m_svgRenderer.load(s.m_fullFileName))
+          throw std::runtime_error("Cannot load SVG symbol " + s.m_fullFileName.toStdString());
         m_svgRenderer.render(&painter, renderRect);
       }
       else if (fullLowerCaseName.endsWith(".png"))
       {
-        painter.drawImage(renderRect, QImage(s.m_fullFileName));
+        QImage const symbol(s.m_fullFileName);
+        if (symbol.isNull())
+          throw std::runtime_error("Cannot load PNG symbol " + s.m_fullFileName.toStdString());
+        painter.drawImage(renderRect, symbol);
       }
     }
 
@@ -252,11 +235,9 @@ bool SkinGenerator::WriteToFileNewStyle(std::string const & skinName)
   if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
     return false;
 
-  // Attributes are written in alphabetical order to keep the output
-  // byte-stable (and identical to the historical QDom serialization)
-  // without relying on a deterministic process-wide hash seed.
-  // The DTD is written directly: the writer's auto-formatting would prepend
-  // a newline before it, and the historical output starts with the DTD line.
+  // A fixed attribute order makes the output reproducible without changing Qt's process-wide
+  // hash seed. Write the DTD directly to keep it on the first line; auto-formatting would prepend
+  // a newline.
   file.write("<!DOCTYPE skin>\n");
 
   QXmlStreamWriter writer(&file);

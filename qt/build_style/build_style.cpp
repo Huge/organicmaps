@@ -3,6 +3,8 @@
 #include "build_drules.h"
 #include "build_skins.h"
 
+#include "indexer/classificator_loader.hpp"
+
 #include "platform/platform.hpp"
 
 #include <exception>
@@ -134,36 +136,15 @@ void BuildAndApply(QString const & mapcssFile, StyleInfo const & info)
     BuildDrawingRules(paths.m_outputDir, info);
     future.get();  // may rethrow exception from the BuildSkin
 
+    classificator::CheckTypesCompatible(paths.m_outputDir.toStdString());
     ApplyDrawingRules(paths.m_outputDir, info);
     ApplySkins(paths.m_outputDir, info.m_theme);
   }
   else
   {
     BuildDrawingRules(paths.m_outputDir, info);
+    classificator::CheckTypesCompatible(paths.m_outputDir.toStdString());
     ApplyDrawingRules(paths.m_outputDir, info);
-  }
-}
-
-void BuildIfNecessaryAndApply(QString const & mapcssFile, StyleInfo const & info)
-{
-  auto const paths = GetStylePaths(mapcssFile);
-
-  if (QDir(paths.m_outputDir).exists())
-  {
-    try
-    {
-      ApplyDrawingRules(paths.m_outputDir, info);
-      if (paths.m_hasSymbols)
-        ApplySkins(paths.m_outputDir, info.m_theme);
-    }
-    catch (std::exception const &)
-    {
-      BuildAndApply(mapcssFile, info);
-    }
-  }
-  else
-  {
-    BuildAndApply(mapcssFile, info);
   }
 }
 
@@ -175,18 +156,8 @@ void RunRecalculationGeometryScript(QString const & mapcssFile, StyleInfo const 
   // Build Style does not rebuild the merged style that generator_tool indexes against.
   BuildMergedDrawingRules(GetStylePaths(mapcssFile).m_outputDir, info);
 
-  // The script passes each map's own directory as --data_path, which generator_tool also makes its
-  // writable dir, so it reads the style files from next to the map. The maps in the resources dir
-  // (the World maps inside the .app bundle on macOS) need the freshly built ones there too.
-  if (QDir(resourceDir).canonicalPath() != QDir(writableDir).canonicalPath())
-  {
-    for (char const * name : {"drules_merged.bin", "classificator.txt", "types.txt"})
-      if (!CopyQtFile(JoinPathQt({writableDir, name}), JoinPathQt({resourceDir, name})))
-        throw std::runtime_error(std::string("Cannot copy ") + name + " to " + resourceDir.toStdString());
-  }
-
-  // generator_tool falls back to the app's resources for anything that is not next to the map. The
-  // macOS Platform honours these variables only when both are set.
+  // Helpers must receive both paths before Platform construction on macOS. The script also passes
+  // explicit CLI paths, so Windows can find shared edited styles independently of each map's directory.
   QProcessEnvironment env{QProcessEnvironment::systemEnvironment()};
   env.insert("MWM_RESOURCES_DIR", resourceDir);
   env.insert("MWM_WRITABLE_DIR", writableDir);
@@ -204,5 +175,67 @@ void RunRecalculationGeometryScript(QString const & mapcssFile, StyleInfo const 
                     &env);
 }
 
+void PrepareEditableMaps()
+{
+  auto const writable = QString::fromStdString(GetPlatform().WritableDir());
+  for (char const * name : {"World.mwm", "WorldCoasts.mwm"})
+  {
+    auto const destination = JoinPathQt({writable, name});
+    if (QFileInfo::exists(destination))
+      continue;
+    CopyFromDataDir(name, writable);
+  }
+}
+
 bool NeedRecalculate = false;
+
+QString ExportPhonePackage(QString const & mapcssFile, StyleInfo const & info, QString const & targetDir,
+                           std::function<bool(QString const &)> const & confirmOverwrite)
+{
+  auto const paths = GetStylePaths(mapcssFile);
+  QString const target = QDir(targetDir).canonicalPath();
+  QString const sources = QDir(info.m_stylesRoot).canonicalPath();
+  if (target.isEmpty() || sources.isEmpty())
+    throw std::runtime_error("The output directory or style sources do not exist");
+
+  QString const destination = JoinPathQt({target, "styles"});
+  QString const canonicalDestination = QFileInfo::exists(destination) ? QDir(destination).canonicalPath() : destination;
+  auto const contains = [](QString const & parent, QString const & child)
+  {
+    auto const relative = QDir(parent).relativeFilePath(child);
+    return !QDir::isAbsolutePath(relative) && relative != ".." && !relative.startsWith("../");
+  };
+  if (contains(sources, canonicalDestination) || contains(canonicalDestination, sources))
+    throw std::runtime_error("Choose an output directory outside the style sources");
+
+  QStringList files{info.m_drulesFile};
+  if (paths.m_hasSymbols)
+    for (auto const & dpi : kSkinDpis)
+      for (char const * leaf : {"symbols.png", "symbols.xml"})
+        files.push_back(JoinPathQt({"symbols", dpi.m_name, info.m_theme, leaf}));
+
+  // Complete validation precedes both confirmation and deletion, so a missing atlas cannot erase
+  // an existing package. Default-family exports require every density, including missing directories.
+  for (auto const & file : files)
+  {
+    auto const source = JoinPathQt({paths.m_outputDir, file});
+    if (!QFileInfo(source).isFile())
+      throw std::runtime_error("Run Build Style first; missing " + source.toStdString());
+  }
+
+  if (QDir(destination).exists())
+  {
+    if (!confirmOverwrite(destination))
+      return {};
+    if (!QDir(destination).removeRecursively())
+      throw std::runtime_error("Cannot remove existing " + destination.toStdString());
+  }
+  for (auto const & file : files)
+  {
+    auto const dest = JoinPathQt({destination, file});
+    if (!QDir().mkpath(QFileInfo(dest).absolutePath()) || !CopyQtFile(JoinPathQt({paths.m_outputDir, file}), dest))
+      throw std::runtime_error("Cannot export " + file.toStdString());
+  }
+  return destination;
+}
 }  // namespace build_style

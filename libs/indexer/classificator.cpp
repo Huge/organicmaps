@@ -1,4 +1,5 @@
 #include "indexer/classificator.hpp"
+#include "indexer/drawing_rules_guard.hpp"
 #include "indexer/map_style_reader.hpp"
 #include "indexer/tree_structure.hpp"
 
@@ -58,6 +59,21 @@ void ClassifObject::AddDrawRule(drule::Key const & k)
   if (k.m_priority > m_maxOverlaysPriority && (k.m_type == drule::symbol || k.m_type == drule::caption ||
                                                k.m_type == drule::shield || k.m_type == drule::pathtext))
     m_maxOverlaysPriority = k.m_priority;
+}
+
+void ClassifObject::ClearDrawingRules()
+{
+  m_drawRules.clear();
+  m_visibility.reset();
+  m_maxOverlaysPriority = std::numeric_limits<int>::min();
+  for (auto & obj : m_objs)
+    obj.ClearDrawingRules();
+}
+
+int ClassifObject::GetMaxOverlaysPriority() const
+{
+  classificator::DrawingRulesReadGuard guard;
+  return m_maxOverlaysPriority;
 }
 
 ClassifObjectPtr ClassifObject::BinaryFind(std::string_view const s) const
@@ -276,6 +292,7 @@ public:
 
 void ClassifObject::GetSuitable(int scale, feature::GeomType gt, drule::KeysT & keys) const
 {
+  classificator::DrawingRulesReadGuard guard;
   ASSERT(static_cast<int>(gt) >= 0 && static_cast<int>(gt) <= 2, ());
 
   // 2. Check visibility criterion for scale first.
@@ -289,16 +306,19 @@ void ClassifObject::GetSuitable(int scale, feature::GeomType gt, drule::KeysT & 
 
 bool ClassifObject::IsDrawable(int scale) const
 {
+  classificator::DrawingRulesReadGuard guard;
   return (m_visibility[scale] && IsDrawableAny());
 }
 
 bool ClassifObject::IsDrawableAny() const
 {
+  classificator::DrawingRulesReadGuard guard;
   return (m_visibility != VisibleMask() && !m_drawRules.empty());
 }
 
 bool ClassifObject::IsDrawableLike(feature::GeomType gt, bool emptyName) const
 {
+  classificator::DrawingRulesReadGuard guard;
   ASSERT(static_cast<int>(gt) >= 0 && static_cast<int>(gt) <= 2, ());
 
   // check the very common criterion first
@@ -330,6 +350,7 @@ bool ClassifObject::IsDrawableLike(feature::GeomType gt, bool emptyName) const
 
 std::pair<int, int> ClassifObject::GetDrawScaleRange() const
 {
+  classificator::DrawingRulesReadGuard guard;
   if (!IsDrawableAny())
     return {-1, -1};
 

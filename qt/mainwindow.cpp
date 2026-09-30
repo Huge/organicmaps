@@ -401,15 +401,15 @@ void MainWindow::CreateNavigationBar()
     if (IsDesignerMode())
     {
       // Add "Build style" button
-      m_pBuildStyleAction =
+      auto * buildStyleAction =
           pToolBar->addAction(QIcon(":/navig64/run.png"), tr("Build style"), this, SLOT(OnBuildStyle()));
-      m_pBuildStyleAction->setCheckable(false);
-      m_pBuildStyleAction->setToolTip(tr("Build style"));
+      buildStyleAction->setCheckable(false);
+      buildStyleAction->setToolTip(tr("Build style"));
 
-      m_pRecalculateGeomIndex = pToolBar->addAction(QIcon(":/navig64/geom.png"), tr("Recalculate geometry index"), this,
-                                                    SLOT(OnRecalculateGeomIndex()));
-      m_pRecalculateGeomIndex->setCheckable(false);
-      m_pRecalculateGeomIndex->setToolTip(tr("Recalculate geometry index"));
+      auto * recalculateGeomIndex = pToolBar->addAction(QIcon(":/navig64/geom.png"), tr("Recalculate geometry index"),
+                                                        this, SLOT(OnrecalculateGeomIndex()));
+      recalculateGeomIndex->setCheckable(false);
+      recalculateGeomIndex->setToolTip(tr("Recalculate geometry index"));
 
       // Add "Debug style" button
       m_pDrawDebugRectAction =
@@ -420,21 +420,22 @@ void MainWindow::CreateNavigationBar()
       m_pDrawWidget->GetFramework().EnableDebugRectRendering(false);
 
       // Add "Get statistics" button
-      m_pGetStatisticsAction =
+      auto * getStatisticsAction =
           pToolBar->addAction(QIcon(":/navig64/chart.png"), tr("Get statistics"), this, SLOT(OnGetStatistics()));
-      m_pGetStatisticsAction->setCheckable(false);
-      m_pGetStatisticsAction->setToolTip(tr("Get statistics"));
+      getStatisticsAction->setCheckable(false);
+      getStatisticsAction->setToolTip(tr("Get statistics"));
 
       // Add "Run tests" button
-      m_pRunTestsAction = pToolBar->addAction(QIcon(":/navig64/test.png"), tr("Run tests"), this, SLOT(OnRunTests()));
-      m_pRunTestsAction->setCheckable(false);
-      m_pRunTestsAction->setToolTip(tr("Run tests"));
+      auto * runTestsAction =
+          pToolBar->addAction(QIcon(":/navig64/test.png"), tr("Run tests"), this, SLOT(OnRunTests()));
+      runTestsAction->setCheckable(false);
+      runTestsAction->setToolTip(tr("Run tests"));
 
       // Add "Build phone package" button
-      m_pBuildPhonePackAction = pToolBar->addAction(QIcon(":/navig64/phonepack.png"), tr("Build phone package"), this,
-                                                    SLOT(OnBuildPhonePackage()));
-      m_pBuildPhonePackAction->setCheckable(false);
-      m_pBuildPhonePackAction->setToolTip(tr("Build phone package"));
+      auto * buildPhonePackAction = pToolBar->addAction(QIcon(":/navig64/phonepack.png"), tr("Build phone package"),
+                                                        this, SLOT(OnBuildPhonePackage()));
+      buildPhonePackAction->setCheckable(false);
+      buildPhonePackAction->setToolTip(tr("Build phone package"));
     }
   }
 
@@ -714,7 +715,6 @@ void MainWindow::OnDebugStyle()
 {
   bool const checked = m_pDrawDebugRectAction->isChecked();
   m_pDrawWidget->GetFramework().EnableDebugRectRendering(checked);
-  m_pDrawWidget->RefreshDrawingRules();
 }
 
 void MainWindow::OnGetStatistics()
@@ -752,50 +752,15 @@ void MainWindow::OnBuildPhonePackage()
     if (targetDir.isEmpty())
       return;
 
-    // Phone-side StyleReader looks under <writable_dir>/styles/ for both the drules
-    // (the packed drules_<family>.bin) and the symbol atlases (symbols/<dpi>/<theme>/).
-    // Mirror that layout here so the user can drop the produced folder onto a device.
-    QString const phoneStylesDir = JoinPathQt({targetDir, "styles"});
-    if (QDir(phoneStylesDir).exists())
+    QString const phoneStylesDir =
+        build_style::ExportPhonePackage(m_mapcssFilePath, m_styleInfo, targetDir, [this](QString const & destination)
     {
-      QMessageBox msgBox;
-      msgBox.setWindowTitle("Warning");
-      msgBox.setText("Folder " + phoneStylesDir + " will be overwritten. Continue?");
-      msgBox.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
-      msgBox.setDefaultButton(QMessageBox::No);
-      if (msgBox.exec() == QMessageBox::No)
-        return;
-      if (!QDir(phoneStylesDir).removeRecursively())
-        throw std::runtime_error("Cannot remove existing " + phoneStylesDir.toStdString());
-    }
-
-    // Build outputs live alongside the opened style.mapcss in its sibling out/ dir.
-    QString const buildOutputDir = JoinPathQt({QFileInfo(m_mapcssFilePath).absolutePath(), "out"});
-
-    QString const drulesName = m_styleInfo.m_drulesFile;
-    QString const drulesSrc = JoinPathQt({buildOutputDir, drulesName});
-    if (!QFileInfo::exists(drulesSrc))
-      throw std::runtime_error("Run Build Style first; missing " + drulesSrc.toStdString());
-
-    if (!QDir().mkpath(phoneStylesDir))
-      throw std::runtime_error("Cannot create " + phoneStylesDir.toStdString());
-
-    if (!CopyQtFile(drulesSrc, JoinPathQt({phoneStylesDir, drulesName})))
-      throw std::runtime_error("Cannot copy " + drulesName.toStdString());
-
-    for (auto const & dpi : build_style::kSkinDpis)
-    {
-      QString const symSrcDir = JoinPathQt({buildOutputDir, "symbols", dpi.m_name, m_styleInfo.m_theme});
-      if (!QDir(symSrcDir).exists())
-        continue;
-      QString const symDstDir = JoinPathQt({phoneStylesDir, "symbols", dpi.m_name, m_styleInfo.m_theme});
-      if (!QDir().mkpath(symDstDir))
-        throw std::runtime_error("Cannot create " + symDstDir.toStdString());
-      // BuildSkinImpl produces both files; if either is missing the package is incomplete.
-      for (auto const * leaf : {"symbols.png", "symbols.xml"})
-        if (!CopyQtFile(JoinPathQt({symSrcDir, leaf}), JoinPathQt({symDstDir, leaf})))
-          throw std::runtime_error(std::string("Cannot copy ") + leaf + " for " + dpi.m_name);
-    }
+      return QMessageBox::question(this, "Overwrite phone package",
+                                   "Folder " + destination + " will be overwritten. Continue?",
+                                   QMessageBox::Yes | QMessageBox::No, QMessageBox::No) == QMessageBox::Yes;
+    });
+    if (phoneStylesDir.isEmpty())
+      return;
 
     QString const text = QString(
                              "Phone package for %1/%2 written to:\n  %3\n\n"

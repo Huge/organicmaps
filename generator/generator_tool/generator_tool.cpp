@@ -91,6 +91,7 @@ DEFINE_bool(preprocess, false, "1st pass - create nodes/ways/relations data.");
 DEFINE_bool(generate_features, false, "2nd pass - generate intermediate features.");
 DEFINE_bool(generate_geometry, false, "3rd pass - split and simplify geometry and triangles for features.");
 DEFINE_bool(generate_index, false, "4rd pass - generate index.");
+DEFINE_string(mwm_file, "", "Existing map to reindex with --generate_index; --data_path supplies its style files.");
 DEFINE_bool(generate_search_index, false, "5th pass - generate search index.");
 DEFINE_bool(generate_cities_boundaries, false, "Generate the cities boundaries section");
 DEFINE_string(cities_boundaries_data, "", "File with cities boundaries");
@@ -245,6 +246,14 @@ MAIN_WITH_ERROR_HANDLING([](int argc, char ** argv)
   GetStyleReader().SetCurrentStyle(MapStyleMerged);
 
   classificator::Load();
+
+  if (!FLAGS_mwm_file.empty())
+  {
+    CHECK(FLAGS_generate_index, ("--mwm_file requires --generate_index"));
+    return indexer::BuildIndexFromDataFile(FLAGS_mwm_file, base::JoinPath(genInfo.m_intermediateDir, "index"))
+             ? EXIT_SUCCESS
+             : EXIT_FAILURE;
+  }
 
   // Generate intermediate files.
   if (FLAGS_preprocess)

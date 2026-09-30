@@ -1,110 +1,74 @@
 #!/usr/bin/env python3
-"""
-recalculate_geom_index.py <resources_dir> <writable_dir> <generator_tool> [<designer_tool> <designer_param>...]
+"""Reindex writable maps using the shared edited styles, then relaunch on success.
 
-Recomputes the geometry index for every .mwm found under <resources_dir> and
-<writable_dir>, using <generator_tool>.  When extra arguments are provided
-they are launched as a child process once index generation completes
-(typically the Designer .app, so it reopens with fresh indices).
+recalculate_geom_index.py <resources_dir> <writable_dir> <generator_tool> [<app> <args>...]
+Bundled World maps must be copied to the writable directory before this script runs.
 """
 
 import os
 import subprocess
 import sys
-from queue import Queue, Empty
-from threading import Thread
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 WORKERS = 8
-
-EXCLUDE_NAMES = ("WorldCoasts.mwm", "WorldCoasts_migrate.mwm")
+EXCLUDE_NAMES = {"WorldCoasts.mwm", "WorldCoasts_migrate.mwm"}
 
 
 def find_all_mwms(data_path):
-    result = []
-    for entry in os.listdir(data_path):
-        new_path = os.path.join(data_path, entry)
-        if os.path.isdir(new_path):
-            result.extend(find_all_mwms(new_path))
-            continue
-        if entry.endswith(".mwm") and entry not in EXCLUDE_NAMES:
-            result.append((entry, data_path))
-    return result
+    return sorted(
+        {
+            p.resolve()
+            for p in Path(data_path).rglob("*.mwm")
+            if p.name not in EXCLUDE_NAMES
+        }
+    )
 
 
-def process_mwm(generator_tool, task, error_queue):
-    name, data_path = task
-    print(f"Processing {name}")
-    try:
+def process_mwm(generator_tool, mwm, resources_dir, writable_dir):
+    print(f"Processing {mwm}", flush=True)
+    # Duplicate country names across versions must never share an index temporary file.
+    with TemporaryDirectory(prefix="designer-index-") as tmp:
         subprocess.run(
-            (
+            [
                 generator_tool,
-                f"--data_path={data_path}",
-                f"--output={name[:-4]}",
+                f"--data_path={writable_dir}",
+                f"--user_resource_path={resources_dir}",
+                f"--mwm_file={mwm}",
                 "--generate_index=true",
-                "--intermediate_data_path=/tmp/",
-            ),
+                f"--intermediate_data_path={tmp}{os.sep}",
+            ],
             check=True,
         )
-    except subprocess.CalledProcessError as e:
-        error_queue.put(str(e))
 
 
-def parallel_worker(tasks, generator_tool, error_queue):
-    while True:
-        try:
-            task = tasks.get_nowait()
-        except Empty:
-            return
-        # Always call task_done() — if process_mwm raises (e.g. FileNotFoundError
-        # when generator_tool is missing), the matching tasks.join() in main()
-        # would otherwise block forever waiting for this task to be marked done.
-        try:
-            process_mwm(generator_tool, task, error_queue)
-        except Exception as e:
-            error_queue.put(str(e))
-        finally:
-            tasks.task_done()
-
-
-def main():
-    if len(sys.argv) < 4:
-        print(
-            f"{sys.argv[0]} <resources_dir> <writable_dir> <generator_tool> "
-            "[<designer_tool> <designer_params>...]"
-        )
-        sys.exit(1)
-
-    resources_dir, writable_dir, generator_tool = sys.argv[1], sys.argv[2], sys.argv[3]
-
-    mwms = find_all_mwms(resources_dir)
-    if writable_dir != resources_dir:
-        mwms.extend(find_all_mwms(writable_dir))
-
-    tasks = Queue()
-    error_queue = Queue()
-    for task in mwms:
-        tasks.put(task)
-
-    for _ in range(WORKERS):
-        t = Thread(target=parallel_worker, args=(tasks, generator_tool, error_queue))
-        t.daemon = True
-        t.start()
-
-    tasks.join()
-    print("Processing done.")
-
-    if len(sys.argv) > 4:
-        print("Starting app")
-        # Not on our stdout/stderr: the caller reads them through pipes that it closes as soon as
-        # this script exits, and the app would then die of SIGPIPE on its first log line.
-        devnull = subprocess.DEVNULL
-        subprocess.Popen(sys.argv[4:], stdin=devnull, stdout=devnull, stderr=devnull)
-
-    if error_queue.qsize() != 0:
-        while error_queue.qsize():
-            print(error_queue.get())
-        sys.exit(1)
+def main(argv=None):
+    args = sys.argv[1:] if argv is None else argv
+    if len(args) < 3:
+        print(__doc__, file=sys.stderr)
+        return 1
+    resources_dir, writable_dir, generator_tool, *relaunch = args
+    try:
+        mwms = find_all_mwms(writable_dir)
+        with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+            list(
+                executor.map(
+                    lambda mwm: process_mwm(
+                        generator_tool, mwm, resources_dir, writable_dir
+                    ),
+                    mwms,
+                )
+            )
+        if relaunch:
+            # The caller closes our output pipes when we exit; the relaunched app needs independent streams.
+            devnull = subprocess.DEVNULL
+            subprocess.Popen(relaunch, stdin=devnull, stdout=devnull, stderr=devnull)
+    except (OSError, subprocess.CalledProcessError) as error:
+        print(error, file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

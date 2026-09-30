@@ -29,7 +29,12 @@ char const kOffsetsExt[] = ".offsets";
 
 string GetAdditionalWorldScope()
 {
+#ifdef OMIM_OS_DESKTOP
+  // Desktop Designer edits writable copies of bundled World maps, keeping the application sealed.
+  return "wr";
+#else
   return "r";
+#endif
 }
 /*
 bool IsSpecialName(string const & name) { return name == "." || name == ".."; }

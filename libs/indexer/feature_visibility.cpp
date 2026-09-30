@@ -2,6 +2,7 @@
 
 #include "indexer/classificator.hpp"
 #include "indexer/drawing_rules.hpp"
+#include "indexer/drawing_rules_guard.hpp"
 #include "indexer/feature.hpp"
 #include "indexer/feature_data.hpp"
 #include "indexer/ftypes_matcher.hpp"
@@ -327,6 +328,7 @@ int GetMinDrawableScaleGeometryOnly(TypesHolder const & types, m2::RectD const &
 
 int GetMinDrawableScaleClassifOnly(TypesHolder const & types)
 {
+  classificator::DrawingRulesReadGuard guard;
   int const upBound = scales::GetUpperStyleScale();
 
   for (int level = 0; level <= upBound; ++level)
@@ -364,6 +366,7 @@ std::pair<int, int> GetDrawableScaleRange(uint32_t type)
 
 std::pair<int, int> GetDrawableScaleRange(TypesHolder const & types)
 {
+  classificator::DrawingRulesReadGuard guard;
   std::pair<int, int> res(1000, -1000);
 
   for (uint32_t t : types)
@@ -374,6 +377,7 @@ std::pair<int, int> GetDrawableScaleRange(TypesHolder const & types)
 
 bool IsVisibleInRange(uint32_t type, std::pair<int, int> const & scaleRange)
 {
+  classificator::DrawingRulesReadGuard guard;
   CHECK_LESS_OR_EQUAL(scaleRange.first, scaleRange.second, (scaleRange));
   if (TypeAlwaysExists(type))
     return true;
@@ -404,6 +408,7 @@ bool IsDrawableForRules(TypesHolder const & types, int level, int rules)
 
 std::pair<int, int> GetDrawableScaleRangeForRules(TypesHolder const & types, int rules)
 {
+  classificator::DrawingRulesReadGuard guard;
   int const upBound = scales::GetUpperStyleScale();
   int lowL = -1;
   for (int level = 0; level <= upBound; ++level)

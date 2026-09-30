@@ -12,6 +12,10 @@ target_link_libraries(skin_generator
     Qt6::Svg
 )
 
+if (SKIP_TOOLS)
+  return()
+endif()
+
 omim_add_executable(${PROJECT_NAME} main.cpp)
 
 target_link_libraries(${PROJECT_NAME}

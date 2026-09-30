@@ -318,6 +318,7 @@ void Framework::OnViewportChanged(ScreenBase const & screen)
 
 Framework::Framework(FrameworkParams const & params, bool loadMaps)
   : m_enabledDiffs(params.m_enableDiffs)
+  , m_fixedMapStyle(params.m_fixedMapStyle)
   , m_isRenderingEnabled(true)
   , m_transitManager(m_featuresFetcher.GetDataSource(),
                      [this](FeatureCallback const & fn, std::vector<FeatureID> const & features)
@@ -347,6 +348,7 @@ Framework::Framework(FrameworkParams const & params, bool loadMaps)
   std::string mapStyleStr;
   if (settings::Get(kMapStyleKey, mapStyleStr))
     mapStyle = MapStyleFromSettings(mapStyleStr);
+  mapStyle = m_fixedMapStyle.value_or(mapStyle);
   GetStyleReader().SetCurrentStyle(mapStyle);
   df::LoadTransitColors();
 
@@ -2059,16 +2061,18 @@ void Framework::OnUpdateGpsTrackPointsCallback(std::vector<std::pair<size_t, loc
 
 void Framework::MarkMapStyle(MapStyle mapStyle)
 {
+  mapStyle = m_fixedMapStyle.value_or(mapStyle);
   ASSERT_NOT_EQUAL(mapStyle, MapStyle::MapStyleMerged, ());
 
-  // Store current map style before classificator reloading
+  // A fixed style belongs to this session; ordinary sessions persist their selected style.
   std::string mapStyleStr = MapStyleToString(mapStyle);
   if (mapStyleStr.empty())
   {
     mapStyle = kDefaultMapStyle;
     mapStyleStr = MapStyleToString(mapStyle);
   }
-  settings::Set(kMapStyleKey, mapStyleStr);
+  if (!m_fixedMapStyle)
+    settings::Set(kMapStyleKey, mapStyleStr);
   // Make sure the new style's family is resident before switching (a no-op once it is loaded, so
   // light<->dark stays zero-IO); drape worker threads observe the switch only via UpdateMapStyle.
   classificator::EnsureStyleLoaded(mapStyle);
@@ -2077,6 +2081,8 @@ void Framework::MarkMapStyle(MapStyle mapStyle)
 
 void Framework::SetMapStyle(MapStyle mapStyle, bool reloadFromDisk)
 {
+  if (m_fixedMapStyle && mapStyle != *m_fixedMapStyle)
+    return;
   MarkMapStyle(mapStyle);
   if (m_drapeEngine != nullptr)
     m_drapeEngine->UpdateMapStyle(reloadFromDisk);

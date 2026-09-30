@@ -11,6 +11,7 @@
 #include <QtCore/QFileInfo>
 #include <QtCore/QProcess>
 #include <QtCore/QProcessEnvironment>
+#include <QtCore/QStandardPaths>
 
 #include <exception>
 #include <string>
@@ -100,9 +101,8 @@ QString GetExternalPath(QString const & name, QString const & relativePath)
 {
   if (!relativePath.isEmpty())
   {
-    // 1. Relative to the resources dir, which in a dev checkout is <repo>/data/ and in the
-    // Designer package is <package>/data/, so "../tools/..." resolves into the repository or
-    // the package.
+    // 1. Relative to the resources dir. When it is the repository's or package's data/ directory,
+    // "../tools/..." resolves into that repository or package.
     QString const resourceDir = GetPlatform().ResourcesDir().c_str();
     QString path = JoinPathQt({resourceDir, relativePath, name});
     if (QFileInfo::exists(path))
@@ -117,18 +117,34 @@ QString GetExternalPath(QString const & name, QString const & relativePath)
       return path;
   }
 
-  // 3. Next to the app: <build>/ from a plain `cmake --build`, or the Designer package's root.
-  // applicationDirPath() inside an .app is <dir>/<bundle>.app/Contents/MacOS, so walk out of it.
+  // Packaged macOS helpers share Contents/MacOS with the app, so their Qt dependencies resolve
+  // against the same bundled Frameworks directory. Development helpers live outside the bundle.
   QDir appDir(QCoreApplication::applicationDirPath());
-  for (auto const & dirName : {QStringLiteral("MacOS"), QStringLiteral("Contents")})
-    if (appDir.dirName() == dirName)
+  QStringList const binaryDirs = [&appDir]
+  {
+    QStringList dirs{appDir.absolutePath()};
+    for (auto const & dirName : {QStringLiteral("MacOS"), QStringLiteral("Contents")})
+      if (appDir.dirName() == dirName)
+        appDir.cdUp();
+    if (appDir.dirName().endsWith(QStringLiteral(".app")))
       appDir.cdUp();
-  if (appDir.dirName().endsWith(QStringLiteral(".app")))
-    appDir.cdUp();
+    if (appDir.absolutePath() != dirs.front())
+      dirs.push_back(appDir.absolutePath());
+    return dirs;
+  }();
 
-  QString const path = JoinPathQt({appDir.absolutePath(), name});
-  if (QFileInfo::exists(path))
-    return path;
+  // Qt adds the platform's executable suffix and checks executability; scripts are passed to Python.
+  if (relativePath.isEmpty())
+  {
+    if (auto const path = QStandardPaths::findExecutable(name, binaryDirs); !path.isEmpty())
+      return path;
+  }
+  else
+  {
+    QString const path = JoinPathQt({appDir.absolutePath(), name});
+    if (QFileInfo::exists(path))
+      return path;
+  }
 
   throw std::runtime_error("Cannot find " + name.toStdString() +
                            "; build all desktop targets and run the app from the repository root");

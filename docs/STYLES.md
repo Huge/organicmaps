@@ -74,12 +74,14 @@ The most convenient way is using [the desktop app](INSTALL.md#desktop-app).
 The desktop app also has a **Designer mode** that rebuilds the
 currently-edited style on demand, without restarting.
 
-A ready-to-run Designer package for Linux and macOS is attached to every
+A Designer package for Linux and macOS is attached to every
 [CMake workflow run](https://github.com/organicmaps/organicmaps/actions/workflows/build-cmake.yaml)
 (open a run of `master` and scroll down to Artifacts).  Unpack it, run
 `./designer.sh` and edit the MapCSS in its `data/styles/`, which is a copy of
-this repository's.  Only `python3` and, on Linux, a system-wide Qt 6 are
-needed; see the package's own `README.md`.  Run
+this repository's.  It needs `python3`; Linux also needs compatible system
+Qt 6 and C++ runtime libraries.  The macOS app and its
+`generator_tool` and `style_tests` helpers share bundled Qt frameworks.
+See the package's own `README.md`.  Run
 `tools/unix/package_designer.sh <build-dir>` to build a package yourself.
 
 To run the Designer from a checkout instead:
@@ -105,31 +107,48 @@ Pass any of the six supported `style.mapcss` files:
 data/styles/{default,outdoors,vehicle}/{light,dark}/style.mapcss
 ```
 
-Designer mode locks the active map style to the file you opened and disables
+Designer mode pins the map style to the file you opened and disables
 the layer-menu Outdoors switch and the night-mode preference (both would
-unload the style being edited).  Edit any include file under
+unload the style being edited).  Debug search commands cannot change that
+style.  Edit any include file under
 `data/styles/<type>/include/` (e.g. `Roads.mapcss`) and click **Build style**
 to recompile and reapply the rules and symbol atlases live.
+The window stays open.  Reload waits for tile readers to finish, replaces drawing
+rules under a read/write lock, and rebuilds renderer caches before returning to
+the GUI.  Type identities stay fixed for the session because maps and type
+checkers retain them.  Edits that change `classificator.txt` or `types.txt` are
+rejected before publishing; regenerate the maps and reopen Designer to use them.
 
 Designer-only buttons:
 
 - **Build style** — recompiles MapCSS via `libkomwm.py`, re-renders the symbol
-  atlases in-process and reloads; results are written to the writable dir and
-  the style's `out/`.  The atlases are pixel-identical to what
-  `generate_symbols.sh` produces but are not run through `optipng`, so re-run
-  that script before committing changes to `data/symbols/`.
+  atlases in-process for the default family and reloads; results are written
+  to the writable dir and the style's `out/`.  Startup recompiles the sources
+  as well, so reopening Designer includes edits made between sessions.
+  The atlases are pixel-identical to what `generate_symbols.sh` produces
+  but are not run through `optipng`, so re-run
+  that script before committing changes to `data/symbols/`.  The outdoors and
+  vehicle families share the default family's atlases; build the corresponding
+  default theme first when adding an icon used by another family.
+  Enabling automatic geometry-index regeneration in Preferences makes a
+  successful Build style close and relaunch Designer through the reindex step.
 - **Recalculate geometry index** — closes the app, rebuilds
   `drules_merged.bin` (the zoom-range union of the light styles, which
   `generator_tool` indexes against), runs `generator_tool
-  --generate_index=true` over every `.mwm` in the resources/writable dirs,
-  then relaunches.  Use this after widening a zoom range; narrowing one takes
+  --generate_index=true` over every `.mwm` in the writable directory,
+  then relaunches on success.  World maps are copied into the writable
+  directory when Designer starts; indexing changes those copies and preserves
+  the application bundle's signature.  Each map gets a separate temporary
+  directory, including different versions with identical country names.
+  Use this after widening a zoom range; narrowing one takes
   effect without it.  Features can only appear at zooms the map has geometry
   for, which `generator_tool --designer` widens by 3 levels when generating
   a map.
 - **Debug style** — toggles drape's debug rect overlay.
 - **Get statistics / Run tests** — invoke `drules_info.py` and `style_tests`.
 - **Build phone package** — exports the currently-edited style to a folder
-  you can copy to a device:
+  you can copy to a device.  Source files and destination overlap are checked
+  before overwrite confirmation; all required density atlases must be present:
   - Android: `<storage>/Android/data/app.organicmaps/files/styles/`
   - iOS: Files → On My iPhone → Organic Maps → `styles/`
 
@@ -147,11 +166,12 @@ Changing display zoom level for features (e.g. from z16- to z14-) might
 not take effect until map's visibility/scale index is rebuilt:
 1. [Build](INSTALL.md#desktop-app) the `generator_tool` binary
 2. Put a map file, e.g. `Georgia.mwm` into the `data/` folder in the repository
-3. Run
+3. Run `tools/unix/generate_drules.sh` so the merged indexing style includes your edits
+4. Run from the repository root:
 ```
-../omim-build-release/generator_tool --generate_index=true --output="Georgia"
+./build/debug/generator_tool --generate_index=true --output=Georgia --data_path=data --user_resource_path=data
 ```
-4. The index of `Georgia.mwm` will be updated in place
+5. The index of `Georgia.mwm` will be updated in place
 
 A whole map needs to be [regenerated](MAPS.md) for the changes to take effect if:
 * the visibility change crosses a geometry index boundary
@@ -167,4 +187,5 @@ The `tools/unix/generate_drules.sh` script uses a customized version of [Kothic]
 stylesheet processor to compile MapCSS files into binary drawing rules files `data/drules_*.bin`.
 The processor also produces text versions of these files (`data/drules_*.txt`) to ease debugging.
 
-The `tools/unix/generate_symbols.sh` script assembles all icons into skin files in various resolutions (`data/resources-*/symbols.png` and `symbols.xml`).
+The `tools/unix/generate_symbols.sh` script assembles all icons into atlases for each density and theme
+(`data/symbols/<dpi>/{light,dark}/symbols.png` and `symbols.xml`).

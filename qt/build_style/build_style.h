@@ -4,6 +4,8 @@
 
 #include <QtCore/QString>
 
+#include <functional>
+
 namespace build_style
 {
 // Identifies which MapStyle the Designer is editing.  Populated by
@@ -26,8 +28,14 @@ struct StyleInfo
 bool TryParseStyleInfo(QString const & mapcssFile, StyleInfo & out);
 
 void BuildAndApply(QString const & mapcssFile, StyleInfo const & info);
-void BuildIfNecessaryAndApply(QString const & mapcssFile, StyleInfo const & info);
+// Copies bundled World maps into the writable directory if absent, before Framework registers them.
+void PrepareEditableMaps();
 void RunRecalculationGeometryScript(QString const & mapcssFile, StyleInfo const & info);
+
+// Validates sources and rejects overlapping destinations before asking to overwrite an existing
+// package. Returns its styles/ directory, or an empty string if overwrite is declined.
+QString ExportPhonePackage(QString const & mapcssFile, StyleInfo const & info, QString const & targetDir,
+                           std::function<bool(QString const &)> const & confirmOverwrite);
 
 extern bool NeedRecalculate;
 }  // namespace build_style

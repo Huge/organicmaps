@@ -86,12 +86,7 @@ private:
   // Designer mode state; empty m_mapcssFilePath means the regular app.
   QString const m_mapcssFilePath;
   build_style::StyleInfo const m_styleInfo;
-  QAction * m_pBuildStyleAction = nullptr;
-  QAction * m_pRecalculateGeomIndex = nullptr;
   QAction * m_pDrawDebugRectAction = nullptr;
-  QAction * m_pGetStatisticsAction = nullptr;
-  QAction * m_pRunTestsAction = nullptr;
-  QAction * m_pBuildPhonePackAction = nullptr;
 
   bool IsDesignerMode() const { return !m_mapcssFilePath.isEmpty(); }
 

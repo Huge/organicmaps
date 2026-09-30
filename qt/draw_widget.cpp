@@ -711,9 +711,8 @@ void DrawWidget::SetRuler(bool enabled)
 
 void DrawWidget::RefreshDrawingRules()
 {
-  // Re-applying the same MapStyle still triggers DrapeEngine::UpdateMapStyle(),
-  // which is what the Designer needs after Build Style overwrites the bundled
-  // drules and symbol atlases.
+  // Request a disk reload even when the style is unchanged: Build Style writes new drawing rules
+  // and symbol atlases into the writable directory.
   m_framework.SetMapStyle(m_framework.GetMapStyle(), true /* reloadFromDisk */);
 }
 

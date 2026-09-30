@@ -250,10 +250,12 @@ int main(int argc, char * argv[])
 
       // Must be set before any style file is read, see StyleReader.
       GetStyleReader().SetDesignerMode(true);
+      frameworkParams.m_fixedMapStyle = styleInfo.m_mapStyle;
 
       try
       {
-        build_style::BuildIfNecessaryAndApply(mapcssFilePath, styleInfo);
+        build_style::PrepareEditableMaps();
+        build_style::BuildAndApply(mapcssFilePath, styleInfo);
       }
       catch (std::exception const & e)
       {

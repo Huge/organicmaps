@@ -14,6 +14,7 @@
 #include "drape_frontend/route_builder.hpp"
 #include "drape_frontend/selection_shape_generator.hpp"
 
+#include "indexer/classificator_loader.hpp"
 #include "indexer/feature.hpp"
 #include "indexer/scales.hpp"
 
@@ -356,6 +357,11 @@ void BackendRenderer::AcceptMessage(ref_ptr<Message> message)
   {
     ref_ptr<SwitchMapStyleMessage> msg = message;
     msg->FilterDependentMessages();
+
+    // The frontend is waiting, tile readers have joined, and this thread owns all remaining
+    // rendering rule reads. Type identities stay immutable; non-rendering style readers use a guard.
+    if (msg->NeedReloadFromDisk())
+      classificator::ReloadDrawingRules();
 
     CHECK(m_context != nullptr, ());
     m_texMng->OnSwitchMapStyle(m_context);

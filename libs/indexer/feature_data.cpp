@@ -1,6 +1,7 @@
 #include "indexer/feature_data.hpp"
 
 #include "indexer/classificator.hpp"
+#include "indexer/drawing_rules_guard.hpp"
 #include "indexer/feature.hpp"
 #include "indexer/ftypes_matcher.hpp"
 
@@ -207,6 +208,8 @@ void TypesHolder::SortByUseless()
 
 void TypesHolder::SortBySpec()
 {
+  // Priorities must remain stable for the entire comparator run.
+  classificator::DrawingRulesReadGuard guard;
   auto const & cl = classif();
   auto const getPriority = [&cl](uint32_t type) { return cl.GetObject(type)->GetMaxOverlaysPriority(); };
 
