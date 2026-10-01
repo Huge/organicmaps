@@ -407,7 +407,7 @@ void MainWindow::CreateNavigationBar()
       buildStyleAction->setToolTip(tr("Build style"));
 
       auto * recalculateGeomIndex = pToolBar->addAction(QIcon(":/navig64/geom.png"), tr("Recalculate geometry index"),
-                                                        this, SLOT(OnrecalculateGeomIndex()));
+                                                        this, &MainWindow::OnRecalculateGeomIndex);
       recalculateGeomIndex->setCheckable(false);
       recalculateGeomIndex->setToolTip(tr("Recalculate geometry index"));
 
