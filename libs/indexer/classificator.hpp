@@ -89,11 +89,13 @@ public:
   std::string const & GetName() const { return m_name; }
   ClassifObject const * GetObject(size_t i) const;
 
+  // Designer drawing-rule reads require the renderer reload barrier or an enclosing
+  // DrawingRulesReadGuard. Type identities and child nodes stay immutable during reload.
   void ClearDrawingRules();
   void GetSuitable(int scale, feature::GeomType gt, drule::KeysT & keys) const;
 
   // Returns std::numeric_limits<int>::min() if there are no overlay drules.
-  int GetMaxOverlaysPriority() const;
+  int GetMaxOverlaysPriority() const { return m_maxOverlaysPriority; }
 
   bool IsDrawable(int scale) const;
   bool IsDrawableAny() const;

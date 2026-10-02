@@ -360,6 +360,7 @@ std::pair<int, int> kInvalidScalesRange(-1, -1);
 
 std::pair<int, int> GetDrawableScaleRange(uint32_t type)
 {
+  classificator::DrawingRulesReadGuard guard;
   auto const res = classif().GetObject(type)->GetDrawScaleRange();
   return (res.first > res.second ? kInvalidScalesRange : res);
 }
@@ -367,10 +368,11 @@ std::pair<int, int> GetDrawableScaleRange(uint32_t type)
 std::pair<int, int> GetDrawableScaleRange(TypesHolder const & types)
 {
   classificator::DrawingRulesReadGuard guard;
+  auto const & cl = classif();
   std::pair<int, int> res(1000, -1000);
 
   for (uint32_t t : types)
-    AddRange(res, GetDrawableScaleRange(t));
+    AddRange(res, cl.GetObject(t)->GetDrawScaleRange());
 
   return (res.first > res.second ? kInvalidScalesRange : res);
 }

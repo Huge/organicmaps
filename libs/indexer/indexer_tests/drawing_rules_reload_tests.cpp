@@ -38,19 +38,24 @@ UNIT_TEST(Designer_RuleReloadPreservesTypeIdentitiesAndConcurrentReaders)
   });
   classificator::Load();
 
-  auto const type = classif().GetTypeByPath({"amenity", "bench"});
-  auto const index = classif().GetIndexForType(type);
-  auto const object = classif().GetObject(type);
-  auto const name = classif().GetReadableObjectName(type);
+  auto & cl = classif();
+  auto const type = cl.GetTypeByPath({"amenity", "bench"});
+  auto const index = cl.GetIndexForType(type);
+  auto const object = cl.GetObject(type);
+  auto const name = cl.GetReadableObjectName(type);
   auto const range = feature::GetDrawableScaleRange(type);
   auto const priority = object->GetMaxOverlaysPriority();
   auto const background = drule::GetCurrentRules().GetBgColor(10);
   feature::TypesHolder input(feature::GeomType::Point);
   input.Add(type);
-  input.Add(classif().GetTypeByPath({"amenity", "hospital"}));
-  input.Add(classif().GetTypeByPath({"building"}));
+  input.Add(cl.GetTypeByPath({"amenity", "hospital"}));
+  input.Add(cl.GetTypeByPath({"building"}));
   auto expected = input;
   expected.SortBySpec();
+  auto const typesRange = feature::GetDrawableScaleRange(input);
+  auto const minScale = feature::GetMinDrawableScaleClassifOnly(input);
+  auto const rulesRange = feature::GetDrawableScaleRangeForRules(input, feature::RULE_SYMBOL);
+  auto const visible = feature::IsVisibleInRange(type, range);
 
   std::atomic<bool> done = false;
   std::atomic<bool> consistent = true;
@@ -59,10 +64,12 @@ UNIT_TEST(Designer_RuleReloadPreservesTypeIdentitiesAndConcurrentReaders)
   {
     while (!done.load())
     {
-      if (classif().GetIndexForType(type) != index || classif().GetTypeForIndex(index) != type ||
-          classif().GetReadableObjectName(type) != name || classif().GetObject(type) != object ||
-          feature::GetDrawableScaleRange(type) != range || object->GetMaxOverlaysPriority() != priority ||
-          drule::GetCurrentRules().GetBgColor(10) != background)
+      if (cl.GetIndexForType(type) != index || cl.GetTypeForIndex(index) != type ||
+          cl.GetReadableObjectName(type) != name || cl.GetObject(type) != object ||
+          feature::GetDrawableScaleRange(type) != range || feature::GetDrawableScaleRange(input) != typesRange ||
+          feature::GetMinDrawableScaleClassifOnly(input) != minScale ||
+          feature::GetDrawableScaleRangeForRules(input, feature::RULE_SYMBOL) != rulesRange ||
+          feature::IsVisibleInRange(type, range) != visible)
         consistent = false;
       auto types = input;
       types.SortBySpec();
@@ -77,6 +84,9 @@ UNIT_TEST(Designer_RuleReloadPreservesTypeIdentitiesAndConcurrentReaders)
   worker.join();
   TEST(consistent.load(), ());
   TEST_GREATER(reads.load(), 0, ());
+  // These getters rely on renderer synchronization; read them after the concurrent work finishes.
+  TEST_EQUAL(object->GetMaxOverlaysPriority(), priority, ());
+  TEST_EQUAL(drule::GetCurrentRules().GetBgColor(10), background, ());
 }
 
 UNIT_TEST(Designer_RejectsChangedTypeSourcesBeforePublication)
@@ -85,7 +95,7 @@ UNIT_TEST(Designer_RejectsChangedTypeSourcesBeforePublication)
   auto const style = reader.GetCurrentStyle();
   auto const designer = reader.IsDesignerMode();
   reader.SetDesignerMode(true);
-  GetStyleReader().SetCurrentStyle(MapStyleDefaultLight);
+  reader.SetCurrentStyle(MapStyleDefaultLight);
   SCOPE_GUARD(restore, [&]
   {
     reader.SetDesignerMode(designer);

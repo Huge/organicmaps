@@ -17,25 +17,27 @@ EXCLUDE_NAMES = {"WorldCoasts.mwm", "WorldCoasts_migrate.mwm"}
 
 
 def find_all_mwms(data_path):
-    return sorted(
-        {
-            p.resolve()
-            for p in Path(data_path).rglob("*.mwm")
-            if p.name not in EXCLUDE_NAMES
-        }
-    )
+    # Keep paths inside the writable root for --output, but process symlink targets only once.
+    mwms = {}
+    for p in Path(data_path).resolve().rglob("*.mwm"):
+        if p.name not in EXCLUDE_NAMES:
+            mwms.setdefault(p.resolve(), p)
+    return sorted(mwms.values())
 
 
 def process_mwm(generator_tool, mwm, resources_dir, writable_dir):
     print(f"Processing {mwm}", flush=True)
+    output = mwm.relative_to(Path(writable_dir).resolve()).with_suffix("")
     # Duplicate country names across versions must never share an index temporary file.
     with TemporaryDirectory(prefix="designer-index-") as tmp:
+        # generator_tool also uses --output as the relative index temporary-file prefix.
+        (Path(tmp) / output).parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             [
                 generator_tool,
                 f"--data_path={writable_dir}",
                 f"--user_resource_path={resources_dir}",
-                f"--mwm_file={mwm}",
+                f"--output={output}",
                 "--generate_index=true",
                 f"--intermediate_data_path={tmp}{os.sep}",
             ],

@@ -50,7 +50,7 @@ private:
 
 // Thin per-kind BaseRule wrappers. They are stored by value in RulesHolder's per-kind deques, which
 // never relocate their elements, so the raw pointers handed out via Find() stay stable for the
-// holder's lifetime.
+// loaded rules' lifetime, until the holder is reloaded.
 struct LineRuleHolder final : BaseRule
 {
   LineRule m_rule;
@@ -88,6 +88,8 @@ public:
   RulesHolder();
   ~RulesHolder();
 
+  // GUI and rendering readers synchronize with Designer reload through DrapeEngine's barriers.
+  // Other readers need DrawingRulesReadGuard around the whole operation, including use of returned rules.
   BaseRule const * Find(Key const & k) const;
 
   uint32_t GetBgColor(int scale) const;

@@ -1,5 +1,4 @@
 #include "indexer/drawing_rules.hpp"
-#include "indexer/drawing_rules_guard.hpp"
 
 #include "indexer/classificator.hpp"
 #include "indexer/map_style_reader.hpp"
@@ -59,7 +58,6 @@ BaseRule const * RulesHolder::Find(Key const & k) const
 
 uint32_t RulesHolder::GetBgColor(int scale) const
 {
-  classificator::DrawingRulesReadGuard guard;
   ASSERT_LESS(scale, static_cast<int>(m_bgColors.size()), ());
   ASSERT_GREATER_OR_EQUAL(scale, 0, ());
   return m_bgColors[scale];
@@ -67,7 +65,6 @@ uint32_t RulesHolder::GetBgColor(int scale) const
 
 uint32_t RulesHolder::GetColor(std::string_view name) const
 {
-  classificator::DrawingRulesReadGuard guard;
   auto const it = m_colors.find(name);
   if (it == m_colors.end())
   {
